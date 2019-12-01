@@ -1,0 +1,18 @@
+[package]
+name = "bochscpu-benches"
+version = "0.1.0"
+authors = ["yrp <yrp604@protonmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "fib"
+path = "src/fib.rs"
+
+[dependencies]
+bochscpu = { path = "../bochscpu" }
+log = { version = "0.4", features = ["release_max_level_off"] }
+memmap = "0.7"
+pt = { path = "lib/pt-rs" }
+stderrlog = "0.4"
