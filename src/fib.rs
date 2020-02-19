@@ -13,6 +13,7 @@ static mut READS: usize = 0;
 static mut WRITES: usize = 0;
 
 static CODE: &'static [u8] = include_bytes!("../asm/fib.o");
+//static CODE: &'static [u8] = b"\xcc";
 
 unsafe fn fib() {
     // first let's set up our address space, we need two pages:
@@ -111,18 +112,24 @@ unsafe fn fib() {
 
     hook::after_execution(|cpuid, _| {
         INS += 1;
-
-        let c = Cpu::from(cpuid);
-
-        if c.rip() == 0x41410000 + CODE.len() as u64 - 1 {
-            c.set_run_state(RunState::Stop);
-        }
     });
     hook::lin_access(|_, _, _, _, _, access| match access {
         MemAccess::Read => READS += 1,
         MemAccess::Write => WRITES += 1,
         MemAccess::Execute => (),
         _ => panic!("bad access type in lin access hook"),
+    });
+
+    struct D();
+    impl Drop for D {
+        fn drop(&mut self) {
+            println!("dropped");
+        }
+    }
+
+    hook::exception(|cpuid, _, _| {
+        let d = D();
+        Cpu::from(cpuid).set_run_state(RunState::Stop);
     });
 
     println!("done, starting emulation...");
@@ -136,7 +143,7 @@ unsafe fn fib() {
     println!("result in rax is {:x}, {} loops", c.rax(), c.rcx());
 
     println!(
-        "emulated {} ins with {} mem reads and {} mem writes in {:?}, {:0.2} mips",
+        "emulated {} ins with {} mem reads and {} mem writes in {:?}, {:0.2}m ips",
         INS,
         READS,
         WRITES,
@@ -146,7 +153,7 @@ unsafe fn fib() {
 }
 
 fn main() {
-    stderrlog::new().verbosity(11).init().unwrap();
+    //stderrlog::new().verbosity(11).init().unwrap();
 
     unsafe { fib() };
 }

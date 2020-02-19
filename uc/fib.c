@@ -123,7 +123,7 @@ int main(void) {
 
 	printf("result in rax is %llx, %lld loops\n", r_rax, r_rcx);
 	printf(
-		"emulated %lld ins with %lld mem reads and %lld mem writes in %.2f secs, %.2f mips\n",
+		"emulated %lld ins with %lld mem reads and %lld mem writes in %.2fs, %.2f mips\n",
 		ins,
 		reads,
 		writes,
