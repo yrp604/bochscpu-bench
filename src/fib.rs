@@ -1,16 +1,14 @@
 use std::mem;
+use std::os::raw::c_void;
 use std::time::Instant;
 
 use memmap::MmapMut;
 use pt::{Flags, PageTable};
 
+use bochscpu::Address;
 use bochscpu::cpu::{Cpu, RunState, Seg};
-use bochscpu::hook::{self, MemAccess};
+use bochscpu::hook::{Hooks, MemAccess, MemType};
 use bochscpu::mem as guest_mem;
-
-static mut INS: usize = 0;
-static mut READS: usize = 0;
-static mut WRITES: usize = 0;
 
 static CODE: &'static [u8] = include_bytes!("../asm/fib.o");
 //static CODE: &'static [u8] = b"\xcc";
@@ -38,12 +36,12 @@ unsafe fn fib() {
         "mapping gpa 0x81810000 to hva {:p}...",
         code_backing.as_ptr()
     );
-    guest_mem::add_page(0x8181_0000, code_backing.as_mut_ptr());
+    guest_mem::page_insert(0x8181_0000, code_backing.as_mut_ptr());
     println!(
         "mapping gpa 0x12345000 to hva {:p}...",
         stack_backing.as_ptr()
     );
-    guest_mem::add_page(0x6789_0000, stack_backing.as_mut_ptr());
+    guest_mem::page_insert(0x6789_0000, stack_backing.as_mut_ptr());
 
     // serialize our page tables
     let (pml4, mut pagetable) = pt.commit().unwrap();
@@ -57,7 +55,7 @@ unsafe fn fib() {
             hva.as_ptr()
         );
 
-        guest_mem::add_page(*gpa, hva.as_mut_ptr());
+        guest_mem::page_insert(*gpa, hva.as_mut_ptr());
     }
     // if we let the mem mapping go out of scope it will be dropped and
     // the backing page unmapped, so we'll just leak it
@@ -108,35 +106,45 @@ unsafe fn fib() {
     // now we're going to set up our hooks:
     // - one to instrument instructions
     // - one to instrument memory accesses
+    // - one to stop on exceptions to end the test
+    //
+    // This is done via the Hooks trait from src/hooks.rs. This trait maps
+    // rust functions to the bochs instrumentation points.
     println!("setting up emulation hooks...");
 
-    hook::after_execution(|cpuid, _| {
-        INS += 1;
-    });
-    hook::lin_access(|_, _, _, _, _, access| match access {
-        MemAccess::Read => READS += 1,
-        MemAccess::Write => WRITES += 1,
-        MemAccess::Execute => (),
-        _ => panic!("bad access type in lin access hook"),
-    });
+    #[derive(Debug, Default)]
+    struct FibBench {
+        reads: usize,
+        writes: usize,
+        ins: usize,
+    }
 
-    struct D();
-    impl Drop for D {
-        fn drop(&mut self) {
-            println!("dropped");
+    impl Hooks for FibBench {
+        fn lin_access(&mut self, _: u32, _: Address, _: Address, _: usize, _: MemType, access: MemAccess) {
+            match access {
+                MemAccess::Read => self.reads += 1,
+                MemAccess::Write => self.writes += 1,
+                MemAccess::Execute => (),
+                _ => panic!("bad access type in lin access hook"),
+            }
+        }
+
+        fn after_execution(&mut self, _: u32, _: *mut c_void) {
+            self.ins += 1;
+        }
+
+        fn exception(&mut self, id: u32, _: u32, _: u32) {
+            unsafe { Cpu::from(id).set_run_state(RunState::Stop) };
         }
     }
 
-    hook::exception(|cpuid, _, _| {
-        let d = D();
-        Cpu::from(cpuid).set_run_state(RunState::Stop);
-    });
+    let mut fb = FibBench::default();
 
     println!("done, starting emulation...");
 
     // now we're off to the races
     let start = Instant::now();
-    c.run();
+    c.prepare().register(&mut fb).run();
     let end = Instant::now();
 
     // print stats and bail
@@ -144,11 +152,11 @@ unsafe fn fib() {
 
     println!(
         "emulated {} ins with {} mem reads and {} mem writes in {:?}, {:0.2}m ips",
-        INS,
-        READS,
-        WRITES,
+        fb.ins,
+        fb.reads,
+        fb.writes,
         end - start,
-        INS as f64 / (end - start).as_secs() as f64 / 1_000_000 as f64
+        fb.ins as f64 / (end - start).as_secs() as f64 / 1_000_000 as f64
     );
 }
 
