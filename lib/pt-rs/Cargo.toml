@@ -9,4 +9,4 @@ bitflags = "1"
 memmap = "0.7"
 
 [dev-dependencies]
-rand = "0.7"
+rand = "0.8"
