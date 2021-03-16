@@ -46,7 +46,7 @@ emulated 201326584 ins with 50331645 mem reads and 50331648 mem writes in 2.5824
 ## fib bench
 
 This is a dumb program to execute a tight loop of assembly. It completely
-integer wrapping, and makes un-needed memory writes intentionally.
+ignores integer wrapping, and makes un-needed memory writes intentionally.
 
 ```
 [bits 64]
