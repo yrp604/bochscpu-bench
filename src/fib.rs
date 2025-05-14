@@ -156,12 +156,12 @@ unsafe fn fib() {
         fb.reads,
         fb.writes,
         end - start,
-        fb.ins as f64 / (end - start).as_secs() as f64 / 1_000_000 as f64
+        fb.ins as f64 / (end - start).as_secs_f64() / 1_000_000 as f64
     );
 }
 
 fn main() {
-    //stderrlog::new().verbosity(11).init().unwrap();
+    stderrlog::new().verbosity(11).init().unwrap();
 
     unsafe { fib() };
 }
