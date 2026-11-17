@@ -120,7 +120,7 @@ unsafe fn fib() {
     }
 
     impl Hooks for FibBench {
-        fn lin_access(&mut self, _: u32, _: Address, _: Address, _: usize, _: MemType, access: MemAccess) {
+        fn lin_access(&mut self, _: u32, _: Address, _: Address, _: usize, _: MemType, access: MemAccess, _: &[u8]) {
             match access {
                 MemAccess::Read => self.reads += 1,
                 MemAccess::Write => self.writes += 1,
